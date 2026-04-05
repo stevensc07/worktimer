@@ -13,3 +13,5 @@ coverage/
 server/credentials/*.json
 .env
 server/credentials/google-service-account.json
+
+server/credentials/google-service-account.json
