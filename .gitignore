@@ -10,3 +10,5 @@ yarn-error.log*
 *.log
 dist/
 coverage/
+
+server/credentials/google-service-account.json
