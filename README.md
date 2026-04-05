@@ -168,3 +168,4 @@ npm run dev
 - Principios SOLID aplicados en separación de capas.
 - Preparado para evolucionar a colas de procesamiento, auditoría y notificaciones sin romper contratos actuales.
 # worktimer
+# worktimer
