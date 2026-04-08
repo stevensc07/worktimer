@@ -209,41 +209,60 @@ async function getHoursMetrics(req, res, next) {
         {
           $match: {
             workerId: workerObjectId,
-            status: 'COMPLETED',
-            updatedAt: { $ne: null }
+            status: 'COMPLETED'
+          }
+        },
+        {
+          $addFields: {
+            effectiveStartedAt: {
+              $ifNull: ['$startedAt', '$createdAt']
+            },
+            effectiveCompletedAt: {
+              $ifNull: ['$completedAt', '$updatedAt']
+            }
+          }
+        },
+        {
+          $match: {
+            effectiveCompletedAt: { $ne: null }
           }
         },
         {
           $addFields: {
             completionMinutes: {
-              $max: [
-                0,
+              $ifNull: [
+                '$taskDurationMinutes',
                 {
-                  $dateDiff: {
-                    startDate: '$createdAt',
-                    endDate: '$updatedAt',
-                    unit: 'minute'
-                  }
+                  $max: [
+                    0,
+                    {
+                      $dateDiff: {
+                        startDate: '$effectiveStartedAt',
+                        endDate: '$effectiveCompletedAt',
+                        unit: 'minute'
+                      }
+                    }
+                  ]
                 }
               ]
             },
             dayStart: {
               $dateTrunc: {
-                date: '$updatedAt',
+                date: '$effectiveCompletedAt',
                 unit: 'day',
                 timezone: 'America/Bogota'
               }
             },
             weekStart: {
               $dateTrunc: {
-                date: '$updatedAt',
+                date: '$effectiveCompletedAt',
                 unit: 'week',
                 timezone: 'America/Bogota'
               }
             },
             monthStart: {
               $dateTrunc: {
-                date: '$updatedAt',
+                date: '$effectiveCompletedAt',
                 unit: 'month',
                 timezone: 'America/Bogota'
               }
@@ -291,7 +310,8 @@ async function getHoursMetrics(req, res, next) {
                   _id: 1,
                   description: 1,
                   createdAt: 1,
-                  completedAt: '$updatedAt',
+                  startedAt: '$effectiveStartedAt',
+                  completedAt: '$effectiveCompletedAt',
                   completionMinutes: 1
                 }
               },
@@ -314,6 +334,7 @@ async function getHoursMetrics(req, res, next) {
       taskId: task._id,
       description: task.description,
       createdAt: task.createdAt,
+      startedAt: task.startedAt,
       completedAt: task.completedAt,
       completionMinutes: task.completionMinutes,
       completionHours: toHours(task.completionMinutes)

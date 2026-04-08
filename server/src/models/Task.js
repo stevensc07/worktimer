@@ -25,6 +25,19 @@ const taskSchema = new mongoose.Schema(
       default: 'PENDING',
       index: true
     },
+    startedAt: {
+      type: Date,
+      default: null
+    },
+    completedAt: {
+      type: Date,
+      default: null
+    },
+    taskDurationMinutes: {
+      type: Number,
+      min: 0,
+      default: 0
+    },
     googleDriveFileIds: {
       type: [String],
       default: []

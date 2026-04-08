@@ -15,15 +15,22 @@ function formatDateTime(value) {
 }
 
 function getDurationMinutes(task, nowEpoch) {
-  if (!task?.createdAt) {
+  if (!task) {
     return 0;
   }
 
-  const start = new Date(task.createdAt).getTime();
-  const end =
-    task.status === 'COMPLETED' && task.updatedAt
-      ? new Date(task.updatedAt).getTime()
-      : nowEpoch;
+  if (task.status === 'PENDING') {
+    return 0;
+  }
+
+  const start = task.startedAt ? new Date(task.startedAt).getTime() : null;
+  if (!start || Number.isNaN(start)) {
+    return 0;
+  }
+
+  const end = task.status === 'COMPLETED'
+    ? new Date(task.completedAt || task.updatedAt || task.startedAt).getTime()
+    : nowEpoch;
 
   return Math.max(0, Math.round((end - start) / 60000));
 }
@@ -53,7 +60,7 @@ function getPrimaryDurationLabel(task) {
     return 'Tiempo en curso';
   }
 
-  return 'Tiempo desde creación';
+  return 'Tiempo sin iniciar';
 }
 
 function TaskPhotoItem({ photo, index }) {
@@ -105,7 +112,7 @@ function TaskDetailView({
   const [nowEpoch, setNowEpoch] = useState(Date.now());
 
   useEffect(() => {
-    if (!task || task.status === 'COMPLETED') {
+    if (!task || task.status !== 'IN_PROGRESS') {
       return undefined;
     }
 
@@ -147,8 +154,12 @@ function TaskDetailView({
           <p>{formatDateTime(task.createdAt)}</p>
         </article>
         <article className="summary-card">
-          <p className="eyebrow">Última actualización</p>
-          <p>{formatDateTime(task.updatedAt)}</p>
+          <p className="eyebrow">Inicio real</p>
+          <p>{task.startedAt ? formatDateTime(task.startedAt) : 'Sin iniciar'}</p>
+        </article>
+        <article className="summary-card">
+          <p className="eyebrow">Finalización</p>
+          <p>{task.completedAt ? formatDateTime(task.completedAt) : (task.status === 'IN_PROGRESS' ? 'En curso' : '-')}</p>
         </article>
         <article className="summary-card">
           <p className="eyebrow">{getPrimaryDurationLabel(task)}</p>

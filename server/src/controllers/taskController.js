@@ -73,19 +73,46 @@ async function updateTaskStatus(req, res, next) {
     const { id } = req.params;
     const { status } = req.body;
 
+    if (!mongoose.isValidObjectId(id)) {
+      throw new ApiError(400, 'id de tarea inválido.');
+    }
+
     if (!['PENDING', 'IN_PROGRESS', 'COMPLETED'].includes(status)) {
       throw new ApiError(400, 'status inválido.');
     }
 
-    const task = await Task.findOneAndUpdate(
-      { _id: id, workerId: req.user.id },
-      { status },
-      { new: true }
-    );
+    const task = await Task.findOne({ _id: id, workerId: req.user.id });
 
     if (!task) {
       throw new ApiError(404, 'No se encontró la tarea indicada.');
     }
+
+    if (status === 'PENDING') {
+      task.status = 'PENDING';
+      task.startedAt = null;
+      task.completedAt = null;
+      task.taskDurationMinutes = 0;
+    }
+
+    if (status === 'IN_PROGRESS') {
+      task.status = 'IN_PROGRESS';
+      task.startedAt = task.startedAt || new Date();
+      task.completedAt = null;
+      task.taskDurationMinutes = 0;
+    }
+
+    if (status === 'COMPLETED') {
+      const completedAt = new Date();
+      const startedAt = task.startedAt || completedAt;
+      const durationMinutes = Math.max(0, Math.round((completedAt - startedAt) / 60000));
+
+      task.status = 'COMPLETED';
+      task.startedAt = startedAt;
+      task.completedAt = completedAt;
+      task.taskDurationMinutes = durationMinutes;
+    }
+
+    await task.save();
 
     return res.status(200).json({
       ok: true,
