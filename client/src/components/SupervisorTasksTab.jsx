@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { listTasks } from '../api/taskApi';
 import { listWorkers } from '../api/userApi';
+import TaskDetailView from './TaskDetailView';
 
 const STATUS_LABEL = {
   PENDING: 'Pendiente',
@@ -12,8 +13,14 @@ function SupervisorTasksTab({ token }) {
   const [workers, setWorkers] = useState([]);
   const [workerId, setWorkerId] = useState('');
   const [tasks, setTasks] = useState([]);
+  const [selectedTaskId, setSelectedTaskId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const selectedTask = useMemo(
+    () => tasks.find((task) => String(task._id) === String(selectedTaskId)) || null,
+    [tasks, selectedTaskId]
+  );
 
   useEffect(() => {
     async function loadWorkers() {
@@ -45,6 +52,9 @@ function SupervisorTasksTab({ token }) {
       try {
         const data = await listTasks(token, { workerId });
         setTasks(data);
+        setSelectedTaskId((current) => (
+          current && !data.some((item) => String(item._id) === String(current)) ? '' : current
+        ));
       } catch (loadError) {
         setError(loadError.message);
       } finally {
@@ -68,7 +78,10 @@ function SupervisorTasksTab({ token }) {
           id="tasks-worker-select"
           className="input-select"
           value={workerId}
-          onChange={(event) => setWorkerId(event.target.value)}
+          onChange={(event) => {
+            setWorkerId(event.target.value);
+            setSelectedTaskId('');
+          }}
         >
           {workers.map((worker) => (
             <option key={worker._id} value={worker._id}>
@@ -78,26 +91,38 @@ function SupervisorTasksTab({ token }) {
         </select>
       </section>
 
-      <section className="panel slide-up">
-        <div className="task-list">
-          {tasks.map((task) => (
-            <article key={task._id} className="task-card">
-              <div className="task-card-header">
-                <h3>{task.description}</h3>
-                <span className={`badge status-${task.status.toLowerCase()}`}>
-                  {STATUS_LABEL[task.status]}
-                </span>
-              </div>
+      {selectedTask ? (
+        <TaskDetailView
+          task={selectedTask}
+          onBack={() => setSelectedTaskId('')}
+          statusLabels={STATUS_LABEL}
+        />
+      ) : (
+        <section className="panel slide-up">
+          <div className="task-list">
+            {tasks.map((task) => (
+              <article
+                key={task._id}
+                className="task-card task-card-clickable"
+                onClick={() => setSelectedTaskId(String(task._id))}
+              >
+                <div className="task-card-header">
+                  <h3>{task.description}</h3>
+                  <span className={`badge status-${task.status.toLowerCase()}`}>
+                    {STATUS_LABEL[task.status]}
+                  </span>
+                </div>
 
-              <p className="hint">Fotos registradas: {task.googleDriveFileIds?.length || 0}</p>
-            </article>
-          ))}
+                <p className="hint">Fotos registradas: {task.googleDriveFileIds?.length || 0}</p>
+              </article>
+            ))}
 
-          {!loading && tasks.length === 0 ? <p className="hint">Sin tareas para este trabajador.</p> : null}
-        </div>
+            {!loading && tasks.length === 0 ? <p className="hint">Sin tareas para este trabajador.</p> : null}
+          </div>
 
-        {error ? <p className="feedback error">{error}</p> : null}
-      </section>
+          {error ? <p className="feedback error">{error}</p> : null}
+        </section>
+      )}
     </div>
   );
 }

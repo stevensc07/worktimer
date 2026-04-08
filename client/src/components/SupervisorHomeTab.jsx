@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getWorkersOverview } from '../api/metricsApi';
+import { createUser } from '../api/userApi';
 import LocationMapCard from './LocationMapCard';
 
 function SupervisorHomeTab({ token }) {
@@ -7,15 +8,34 @@ function SupervisorHomeTab({ token }) {
   const [selectedWorkerId, setSelectedWorkerId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [newEmployeeId, setNewEmployeeId] = useState('');
+  const [newWorkerName, setNewWorkerName] = useState('');
+  const [newRole, setNewRole] = useState('OBRERO');
+  const [newPin, setNewPin] = useState('');
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [createUserFeedback, setCreateUserFeedback] = useState('');
 
-  async function loadOverview() {
+  async function loadOverview(preferredWorkerId = '') {
     setLoading(true);
     setError('');
 
     try {
       const data = await getWorkersOverview(token);
       setOverview(data);
-      setSelectedWorkerId((current) => current || String(data.workers[0]?.id || ''));
+
+      const workerIds = new Set(data.workers.map((worker) => String(worker.id)));
+
+      setSelectedWorkerId((current) => {
+        if (preferredWorkerId && workerIds.has(String(preferredWorkerId))) {
+          return String(preferredWorkerId);
+        }
+
+        if (current && workerIds.has(String(current))) {
+          return String(current);
+        }
+
+        return String(data.workers[0]?.id || '');
+      });
     } catch (loadError) {
       setError(loadError.message);
     } finally {
@@ -30,6 +50,32 @@ function SupervisorHomeTab({ token }) {
     return () => window.clearInterval(intervalId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  async function handleCreateUser(event) {
+    event.preventDefault();
+    setCreateUserFeedback('');
+    setCreatingUser(true);
+
+    try {
+      const createdUser = await createUser(token, {
+        employeeId: newEmployeeId.trim().toUpperCase(),
+        name: newWorkerName.trim(),
+        role: newRole,
+        pin: newPin
+      });
+
+      setCreateUserFeedback(`Usuario ${createdUser.name} (${createdUser.employeeId}) creado correctamente.`);
+      setNewEmployeeId('');
+      setNewWorkerName('');
+      setNewPin('');
+
+      await loadOverview(createdUser.role === 'OBRERO' ? createdUser.id : '');
+    } catch (createError) {
+      setCreateUserFeedback(createError.message);
+    } finally {
+      setCreatingUser(false);
+    }
+  }
 
   const selectedWorker = useMemo(() => {
     if (!overview.workers.length) {
@@ -110,6 +156,67 @@ function SupervisorHomeTab({ token }) {
         </div>
 
         {error ? <p className="feedback error">{error}</p> : null}
+      </section>
+
+      <section className="panel slide-up">
+        <div className="panel-header-row">
+          <h2>Crear Usuario</h2>
+          {creatingUser ? <span className="badge badge-muted">Guardando...</span> : null}
+        </div>
+
+        <form className="task-create-form" onSubmit={handleCreateUser}>
+          <label htmlFor="new-user-employee-id" className="eyebrow">ID de Empleado</label>
+          <input
+            id="new-user-employee-id"
+            type="text"
+            value={newEmployeeId}
+            onChange={(event) => setNewEmployeeId(event.target.value.toUpperCase())}
+            placeholder="Ej: OB-1023"
+            required
+          />
+
+          <label htmlFor="new-user-name" className="eyebrow">Nombre</label>
+          <input
+            id="new-user-name"
+            type="text"
+            value={newWorkerName}
+            onChange={(event) => setNewWorkerName(event.target.value)}
+            placeholder="Nombre completo"
+            required
+          />
+
+          <label htmlFor="new-user-role" className="eyebrow">Rol</label>
+          <select
+            id="new-user-role"
+            className="input-select"
+            value={newRole}
+            onChange={(event) => setNewRole(event.target.value)}
+          >
+            <option value="OBRERO">Obrero</option>
+            <option value="SUPERVISOR">Supervisor</option>
+          </select>
+
+          <label htmlFor="new-user-pin" className="eyebrow">PIN / Contraseña</label>
+          <input
+            id="new-user-pin"
+            type="password"
+            minLength={4}
+            value={newPin}
+            onChange={(event) => setNewPin(event.target.value)}
+            placeholder="Mínimo 4 caracteres"
+            required
+          />
+
+          <button type="submit" className="cta-button" disabled={creatingUser}>
+            {creatingUser ? 'Creando usuario...' : 'Crear usuario'}
+          </button>
+        </form>
+
+        {createUserFeedback ? (
+          <p className={`feedback ${createUserFeedback.includes('correctamente') ? '' : 'error'}`}>
+            {createUserFeedback}
+          </p>
+        ) : null}
       </section>
 
       <LocationMapCard

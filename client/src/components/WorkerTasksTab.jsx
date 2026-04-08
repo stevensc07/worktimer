@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { uploadActivityPhoto } from '../api/activityApi';
 import { createTask, listTasks, updateTaskStatus } from '../api/taskApi';
+import TaskDetailView from './TaskDetailView';
 
 const TASK_STATUS = ['PENDING', 'IN_PROGRESS', 'COMPLETED'];
 const TASK_STATUS_LABEL = {
@@ -21,11 +22,17 @@ function nextTaskStatus(current) {
 function WorkerTasksTab({ token, activeSession }) {
   const [description, setDescription] = useState('');
   const [tasks, setTasks] = useState([]);
+  const [selectedTaskId, setSelectedTaskId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [uploadingTaskId, setUploadingTaskId] = useState(null);
+
+  const selectedTask = useMemo(
+    () => tasks.find((task) => String(task._id) === String(selectedTaskId)) || null,
+    [tasks, selectedTaskId]
+  );
 
   async function loadTasks(nextFilter = statusFilter) {
     setIsLoading(true);
@@ -36,6 +43,9 @@ function WorkerTasksTab({ token, activeSession }) {
       });
 
       setTasks(data);
+      setSelectedTaskId((current) => (
+        current && !data.some((item) => String(item._id) === String(current)) ? '' : current
+      ));
     } catch (error) {
       setFeedback(error.message);
     } finally {
@@ -100,14 +110,28 @@ function WorkerTasksTab({ token, activeSession }) {
     setUploadingTaskId(task._id);
 
     try {
-      await uploadActivityPhoto(token, {
+      const uploaded = await uploadActivityPhoto(token, {
         file,
         taskId: task._id,
         workSessionId: activeSession?._id
       });
 
+      setTasks((prev) => prev.map((item) => {
+        if (String(item._id) !== String(task._id)) {
+          return item;
+        }
+
+        const existingFileIds = item.googleDriveFileIds || [];
+        if (!uploaded?.fileId || existingFileIds.includes(uploaded.fileId)) {
+          return item;
+        }
+
+        return {
+          ...item,
+          googleDriveFileIds: [...existingFileIds, uploaded.fileId]
+        };
+      }));
       setFeedback(`Foto adjuntada a la tarea: ${task.description}`);
-      await loadTasks();
     } catch (error) {
       setFeedback(error.message);
     } finally {
@@ -118,6 +142,24 @@ function WorkerTasksTab({ token, activeSession }) {
   async function handleFilterChange(nextFilter) {
     setStatusFilter(nextFilter);
     await loadTasks(nextFilter);
+  }
+
+  if (selectedTask) {
+    return (
+      <div className="tab-content-grid tasks-tab-grid">
+        <TaskDetailView
+          task={selectedTask}
+          onBack={() => setSelectedTaskId('')}
+          statusLabels={TASK_STATUS_LABEL}
+          canManage
+          onAdvanceStatus={handleStatusAdvance}
+          onUploadPhoto={handlePhotoUpload}
+          uploadingTaskId={uploadingTaskId}
+        />
+
+        {feedback ? <p className="feedback">{feedback}</p> : null}
+      </div>
+    );
   }
 
   return (
@@ -181,7 +223,11 @@ function WorkerTasksTab({ token, activeSession }) {
 
         <div className="task-list">
           {tasks.map((task) => (
-            <article key={task._id} className="task-card">
+            <article
+              key={task._id}
+              className="task-card task-card-clickable"
+              onClick={() => setSelectedTaskId(String(task._id))}
+            >
               <div className="task-card-header">
                 <h3>{task.description}</h3>
                 <span className={`badge status-${task.status.toLowerCase()}`}>
@@ -191,7 +237,7 @@ function WorkerTasksTab({ token, activeSession }) {
 
               <p className="hint">Fotos adjuntas: {task.googleDriveFileIds?.length || 0}</p>
 
-              <div className="task-card-actions">
+              <div className="task-card-actions" onClick={(event) => event.stopPropagation()}>
                 <button
                   type="button"
                   className="secondary-action"
