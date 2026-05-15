@@ -1,5 +1,5 @@
 const ApiError = require('../utils/ApiError');
-const Task = require('../models/Task');
+const { Task } = require('../models/Task');
 const WorkSession = require('../models/WorkSession');
 const { uploadToDrive } = require('../services/googleDriveService');
 

@@ -1,10 +1,15 @@
 import { buildOpenStreetMapEmbedUrl, formatCoordinates } from '../utils/location';
+import InfoHint from './InfoHint';
 
 function LocationMapCard({ title, subtitle, location }) {
   const mapUrl = buildOpenStreetMapEmbedUrl(location);
 
   return (
     <section className="panel map-panel slide-up">
+      <InfoHint
+        title="Mapa"
+        text="Muestra la ubicacion GPS del trabajador seleccionado cuando tiene jornada activa."
+      />
       <div className="panel-header-row">
         <div>
           <h2>{title || 'Mapa de Ubicación'}</h2>

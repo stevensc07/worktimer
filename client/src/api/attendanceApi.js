@@ -19,3 +19,11 @@ export function checkOut(token, location) {
     body: { location }
   });
 }
+
+export function closeWorkSession(token, sessionId) {
+  return request(`/attendance/sessions/${sessionId}/close`, {
+    method: 'PATCH',
+    token,
+    body: { reason: 'Cierre manual desde supervisión.' }
+  });
+}

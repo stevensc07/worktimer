@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import InfoHint from './InfoHint';
 
 function LoginForm() {
   const { login, authNotice } = useAuth();
@@ -27,32 +28,37 @@ function LoginForm() {
   return (
     <main className="login-screen">
       <section className="login-card fade-in">
+        <InfoHint
+          title="Entrada"
+          text="Use el numero de trabajador y el PIN para abrir la aplicacion."
+        />
         <div className="brand-block">
           <div className="brand-icon" aria-hidden>
-            <span>🏗</span>
+            <span>🏗️</span>
           </div>
-          <h1>SITE OPS</h1>
-          <p>Acceso restringido para personal autorizado.</p>
+          <h1>Entrar a obra</h1>
+          <p>SITE OPS</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
-          <label htmlFor="employeeId">ID de Empleado</label>
+          <label htmlFor="employeeId">Número de trabajador</label>
           <input
             id="employeeId"
             type="text"
             autoComplete="username"
-            placeholder="Ej: 8820-X"
+            placeholder="Ej: 8820"
             value={employeeId}
             onChange={(event) => setEmployeeId(event.target.value.toUpperCase())}
             required
           />
 
-          <label htmlFor="pin">PIN / Contraseña</label>
+          <label htmlFor="pin">PIN</label>
           <input
             id="pin"
             type="password"
+            inputMode="numeric"
             autoComplete="current-password"
-            placeholder="••••••••"
+            placeholder="••••"
             value={pin}
             onChange={(event) => setPin(event.target.value)}
             required
@@ -62,7 +68,7 @@ function LoginForm() {
           {error ? <p className="feedback error">{error}</p> : null}
 
           <button type="submit" className="cta-button" disabled={isSubmitting}>
-            {isSubmitting ? 'Validando...' : 'Iniciar Sesión'}
+            {isSubmitting ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
       </section>

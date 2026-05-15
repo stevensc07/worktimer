@@ -1,5 +1,49 @@
 const mongoose = require('mongoose');
 
+const TASK_STATUS = {
+  PENDING: 'PENDING',
+  IN_PROGRESS: 'IN_PROGRESS',
+  STOPPED: 'STOPPED',
+  COMPLETED: 'COMPLETED'
+};
+
+const taskCommentSchema = new mongoose.Schema(
+  {
+    text: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    createdByName: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    createdByRole: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    source: {
+      type: String,
+      enum: ['typed', 'voice'],
+      default: 'typed'
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  },
+  {
+    versionKey: false
+  }
+);
+
 const taskSchema = new mongoose.Schema(
   {
     workerId: {
@@ -21,8 +65,8 @@ const taskSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['PENDING', 'IN_PROGRESS', 'COMPLETED'],
-      default: 'PENDING',
+      enum: Object.values(TASK_STATUS),
+      default: TASK_STATUS.PENDING,
       index: true
     },
     startedAt: {
@@ -33,6 +77,20 @@ const taskSchema = new mongoose.Schema(
       type: Date,
       default: null
     },
+    stoppedAt: {
+      type: Date,
+      default: null
+    },
+    stoppedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
+    },
+    stopReason: {
+      type: String,
+      trim: true,
+      default: null
+    },
     taskDurationMinutes: {
       type: Number,
       min: 0,
@@ -40,6 +98,10 @@ const taskSchema = new mongoose.Schema(
     },
     googleDriveFileIds: {
       type: [String],
+      default: []
+    },
+    comments: {
+      type: [taskCommentSchema],
       default: []
     }
   },
@@ -49,4 +111,7 @@ const taskSchema = new mongoose.Schema(
   }
 );
 
-module.exports = mongoose.model('Task', taskSchema);
+module.exports = {
+  Task: mongoose.model('Task', taskSchema),
+  TASK_STATUS
+};

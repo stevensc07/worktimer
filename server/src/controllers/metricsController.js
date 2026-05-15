@@ -1,8 +1,14 @@
 const mongoose = require('mongoose');
 const WorkSession = require('../models/WorkSession');
-const Task = require('../models/Task');
+const { Task, TASK_STATUS } = require('../models/Task');
 const { User, USER_ROLES } = require('../models/User');
 const ApiError = require('../utils/ApiError');
+const {
+  BOSTON_TIME_ZONE,
+  getBostonPeriodEnd,
+  getBostonStartOfMonth,
+  getBostonStartOfWeek
+} = require('../services/timeControlService');
 
 function toHours(minutes = 0) {
   return Number((minutes / 60).toFixed(2));
@@ -10,20 +16,6 @@ function toHours(minutes = 0) {
 
 function toObjectId(value) {
   return new mongoose.Types.ObjectId(value);
-}
-
-function getStartOfWeek(date) {
-  const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
-
-  const day = (start.getDay() + 6) % 7; // lunes = 0
-  start.setDate(start.getDate() - day);
-
-  return start;
-}
-
-function getStartOfMonth(date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
 function mapGeoPoint(geoPoint) {
@@ -42,18 +34,7 @@ function periodKey(value) {
 }
 
 function periodEnd(periodStart, granularity) {
-  const end = new Date(periodStart);
-
-  if (granularity === 'daily') {
-    end.setDate(end.getDate() + 1);
-  } else if (granularity === 'weekly') {
-    end.setDate(end.getDate() + 7);
-  } else {
-    end.setMonth(end.getMonth() + 1);
-  }
-
-  end.setMilliseconds(end.getMilliseconds() - 1);
-  return end;
+  return getBostonPeriodEnd(periodStart, granularity);
 }
 
 function mergePeriodRows(hoursRows = [], taskRows = [], granularity) {
@@ -138,21 +119,22 @@ async function getHoursMetrics(req, res, next) {
               $dateTrunc: {
                 date: '$startTime',
                 unit: 'day',
-                timezone: 'America/Bogota'
+                timezone: BOSTON_TIME_ZONE
               }
             },
             weekStart: {
               $dateTrunc: {
                 date: '$startTime',
                 unit: 'week',
-                timezone: 'America/Bogota'
+                timezone: BOSTON_TIME_ZONE,
+                startOfWeek: 'monday'
               }
             },
             monthStart: {
               $dateTrunc: {
                 date: '$startTime',
                 unit: 'month',
-                timezone: 'America/Bogota'
+                timezone: BOSTON_TIME_ZONE
               }
             }
           }
@@ -209,7 +191,7 @@ async function getHoursMetrics(req, res, next) {
         {
           $match: {
             workerId: workerObjectId,
-            status: 'COMPLETED'
+            status: TASK_STATUS.COMPLETED
           }
         },
         {
@@ -250,21 +232,22 @@ async function getHoursMetrics(req, res, next) {
               $dateTrunc: {
                 date: '$effectiveCompletedAt',
                 unit: 'day',
-                timezone: 'America/Bogota'
+                timezone: BOSTON_TIME_ZONE
               }
             },
             weekStart: {
               $dateTrunc: {
                 date: '$effectiveCompletedAt',
                 unit: 'week',
-                timezone: 'America/Bogota'
+                timezone: BOSTON_TIME_ZONE,
+                startOfWeek: 'monday'
               }
             },
             monthStart: {
               $dateTrunc: {
                 date: '$effectiveCompletedAt',
                 unit: 'month',
-                timezone: 'America/Bogota'
+                timezone: BOSTON_TIME_ZONE
               }
             }
           }
@@ -412,6 +395,7 @@ async function getWorkersOverview(req, res, next) {
             totalWeekHours: 0,
             totalMonthHours: 0,
             totalPendingTasks: 0,
+            totalStoppedTasks: 0,
             totalCompletedTasks: 0,
             completionRate: 0
           },
@@ -422,8 +406,8 @@ async function getWorkersOverview(req, res, next) {
 
     const workerObjectIds = workers.map((worker) => worker._id);
     const now = new Date();
-    const startOfWeek = getStartOfWeek(now);
-    const startOfMonth = getStartOfMonth(now);
+    const startOfWeek = getBostonStartOfWeek(now);
+    const startOfMonth = getBostonStartOfMonth(now);
 
     const [hoursMetrics, taskMetrics, activeSessions] = await Promise.all([
       WorkSession.aggregate([
@@ -492,17 +476,22 @@ async function getWorkersOverview(req, res, next) {
             totalTasks: { $sum: 1 },
             pendingTasks: {
               $sum: {
-                $cond: [{ $eq: ['$status', 'PENDING'] }, 1, 0]
+                $cond: [{ $eq: ['$status', TASK_STATUS.PENDING] }, 1, 0]
               }
             },
             inProgressTasks: {
               $sum: {
-                $cond: [{ $eq: ['$status', 'IN_PROGRESS'] }, 1, 0]
+                $cond: [{ $eq: ['$status', TASK_STATUS.IN_PROGRESS] }, 1, 0]
+              }
+            },
+            stoppedTasks: {
+              $sum: {
+                $cond: [{ $eq: ['$status', TASK_STATUS.STOPPED] }, 1, 0]
               }
             },
             completedTasks: {
               $sum: {
-                $cond: [{ $eq: ['$status', 'COMPLETED'] }, 1, 0]
+                $cond: [{ $eq: ['$status', TASK_STATUS.COMPLETED] }, 1, 0]
               }
             }
           }
@@ -542,16 +531,18 @@ async function getWorkersOverview(req, res, next) {
         monthHours: toHours(hours?.monthMinutes || 0),
         totalHours: toHours(hours?.totalMinutes || 0),
         tasks: {
-          total: tasks?.totalTasks || 0,
-          pending: tasks?.pendingTasks || 0,
-          inProgress: tasks?.inProgressTasks || 0,
-          completed: tasks?.completedTasks || 0
-        },
-        activeSession: activeSession
-          ? {
-              startTime: activeSession.startTime,
-              checkInLocation: mapGeoPoint(activeSession.checkInLocation)
-            }
+            total: tasks?.totalTasks || 0,
+            pending: tasks?.pendingTasks || 0,
+            inProgress: tasks?.inProgressTasks || 0,
+            stopped: tasks?.stoppedTasks || 0,
+            completed: tasks?.completedTasks || 0
+          },
+          activeSession: activeSession
+            ? {
+                id: activeSession._id,
+                startTime: activeSession.startTime,
+                checkInLocation: mapGeoPoint(activeSession.checkInLocation)
+              }
           : null
       };
     });
@@ -565,6 +556,7 @@ async function getWorkersOverview(req, res, next) {
       workersWithMetrics.reduce((acc, item) => acc + item.monthHours, 0).toFixed(2)
     );
     const totalPendingTasks = workersWithMetrics.reduce((acc, item) => acc + item.tasks.pending, 0);
+    const totalStoppedTasks = workersWithMetrics.reduce((acc, item) => acc + item.tasks.stopped, 0);
     const totalCompletedTasks = workersWithMetrics.reduce((acc, item) => acc + item.tasks.completed, 0);
     const totalTasks = workersWithMetrics.reduce((acc, item) => acc + item.tasks.total, 0);
 
@@ -579,6 +571,7 @@ async function getWorkersOverview(req, res, next) {
           totalWeekHours,
           totalMonthHours,
           totalPendingTasks,
+          totalStoppedTasks,
           totalCompletedTasks,
           completionRate
         },
@@ -616,6 +609,7 @@ async function getActiveLocations(req, res, next) {
 
       return {
         workerId: session.workerId,
+        sessionId: session._id,
         employeeId: worker?.employeeId,
         name: worker?.name,
         startTime: session.startTime,

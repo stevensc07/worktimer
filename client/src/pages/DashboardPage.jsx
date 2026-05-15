@@ -84,26 +84,28 @@ function DashboardPage() {
   return (
     <main className={`dashboard-shell tab-${activeTab}`}>
       <header className="topbar fade-in">
-        <div>
+        <div className="topbar-title">
           <p className="eyebrow">SITE OPS</p>
           <h1>
-            {activeTab === 'home' && (isSupervisor ? 'Panel de Supervisión' : 'Control de Jornada')}
-            {activeTab === 'tasks' && (isSupervisor ? 'Monitoreo de Tareas' : 'Tareas de Obra')}
-            {activeTab === 'metrics' && 'Métricas de Rendimiento'}
+            {activeTab === 'home' && (isSupervisor ? 'Supervisión' : 'Trabajo de hoy')}
+            {activeTab === 'tasks' && (isSupervisor ? 'Tareas del equipo' : 'Mis tareas')}
+            {activeTab === 'metrics' && 'Reportes'}
           </h1>
-          <p>
-            {user?.name} | {user?.role} ({user?.employeeId})
+          <p className="topbar-user">
+            <span aria-hidden>{isSupervisor ? '🦺' : '👷'}</span>
+            <span>{user?.name}</span>
+            <strong>{user?.employeeId}</strong>
           </p>
         </div>
 
         <div className="topbar-actions">
           {deferredPrompt ? (
             <button type="button" className="secondary-button" onClick={installApp}>
-              Instalar App
+              Instalar
             </button>
           ) : null}
           <button type="button" className="secondary-button" onClick={logout}>
-            Cerrar Sesión
+            Salir
           </button>
         </div>
       </header>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { checkIn, checkOut } from '../api/attendanceApi';
 import { getCurrentPosition } from '../hooks/useGeolocation';
+import InfoHint from './InfoHint';
 
 function formatElapsed(startTime, now = Date.now()) {
   if (!startTime) {
@@ -69,10 +70,23 @@ function AttendanceAction({ token, activeSession, onSessionChange, onLocationCap
 
   return (
     <section className="panel attendance-panel slide-up">
-      <h2>Tiempo de Turno Actual</h2>
-      <p className="timer">{formatElapsed(activeSession?.startTime, elapsedRefresher)}</p>
-      <p className={`status-chip ${activeSession ? 'online' : 'offline'}`}>
-        {activeSession ? 'Jornada en curso' : 'Sin jornada activa'}
+      <InfoHint
+        title="Jornada"
+        text="Aqui el trabajador entra al comenzar el dia y sale al terminar. El tiempo queda guardado con GPS."
+      />
+      <div className="panel-header-row">
+        <div>
+          <p className="eyebrow">Jornada</p>
+          <h2>{activeSession ? 'Trabajando' : 'Sin iniciar'}</h2>
+        </div>
+        <span className={`status-dot ${activeSession ? 'online' : 'offline'}`} aria-hidden />
+      </div>
+
+      <p className="timer" aria-label="Tiempo de jornada">
+        {formatElapsed(activeSession?.startTime, elapsedRefresher)}
+      </p>
+      <p className={`status-chip ${activeSession ? 'online' : 'offline'}`} aria-live="polite">
+        {activeSession ? 'Jornada abierta' : 'Toca entrar para comenzar'}
       </p>
 
       <div className="action-grid">
@@ -82,7 +96,8 @@ function AttendanceAction({ token, activeSession, onSessionChange, onLocationCap
           disabled={isRunning || Boolean(activeSession)}
           onClick={() => runAction('check-in')}
         >
-          {isRunning ? 'Obteniendo GPS...' : 'Accionar Check-in'}
+          <span aria-hidden>🟢</span>
+          <span>{isRunning ? 'GPS...' : 'Entrar'}</span>
         </button>
 
         <button
@@ -91,11 +106,12 @@ function AttendanceAction({ token, activeSession, onSessionChange, onLocationCap
           disabled={isRunning || !activeSession}
           onClick={() => runAction('check-out')}
         >
-          {isRunning ? 'Procesando salida...' : 'Accionar Check-out'}
+          <span aria-hidden>🛑</span>
+          <span>{isRunning ? 'Cerrando...' : 'Salir'}</span>
         </button>
       </div>
 
-      {feedback ? <p className="feedback">{feedback}</p> : null}
+      {feedback ? <p className="feedback" aria-live="polite">{feedback}</p> : null}
     </section>
   );
 }

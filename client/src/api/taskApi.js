@@ -34,3 +34,11 @@ export function updateTaskStatus(token, taskId, status) {
     body: { status }
   });
 }
+
+export function addTaskComment(token, taskId, { text, source = 'typed' }) {
+  return request(`/tasks/${taskId}/comments`, {
+    method: 'POST',
+    token,
+    body: { text, source }
+  });
+}

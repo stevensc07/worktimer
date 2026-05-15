@@ -4,6 +4,7 @@ const morgan = require('morgan');
 const routes = require('./routes');
 const connectDatabase = require('./config/database');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
+const { enforceDailyCutoff } = require('./services/timeControlService');
 
 const app = express();
 
@@ -14,6 +15,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(async (req, res, next) => {
   try {
     await connectDatabase();
+    await enforceDailyCutoff();
     return next();
   } catch (error) {
     return next(error);

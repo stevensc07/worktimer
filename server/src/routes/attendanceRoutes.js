@@ -2,6 +2,7 @@ const express = require('express');
 const {
   checkIn,
   checkOut,
+  closeSessionBySupervisor,
   getMyCurrentSession
 } = require('../controllers/attendanceController');
 const { authRequired, authorizeRoles } = require('../middleware/authMiddleware');
@@ -12,5 +13,6 @@ router.use(authRequired);
 router.get('/current', getMyCurrentSession);
 router.post('/check-in', authorizeRoles('OBRERO', 'SUPERVISOR'), checkIn);
 router.post('/check-out', authorizeRoles('OBRERO', 'SUPERVISOR'), checkOut);
+router.patch('/sessions/:id/close', authorizeRoles('SUPERVISOR'), closeSessionBySupervisor);
 
 module.exports = router;

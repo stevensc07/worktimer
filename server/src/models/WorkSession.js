@@ -58,6 +58,24 @@ const workSessionSchema = new mongoose.Schema(
       type: locationSchema,
       default: null
     },
+    closedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
+    },
+    closedByRole: {
+      type: String,
+      default: null
+    },
+    closeReason: {
+      type: String,
+      trim: true,
+      default: null
+    },
+    autoClosed: {
+      type: Boolean,
+      default: false
+    },
     activityPhotoFileIds: {
       type: [String],
       default: []

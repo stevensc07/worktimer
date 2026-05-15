@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import AttendanceAction from "./AttendanceAction";
-import LocationMapCard from "./LocationMapCard";
+import InfoHint from "./InfoHint";
 import { getCurrentPosition } from "../hooks/useGeolocation";
 import { toLatLngFromGeoJsonPoint } from "../utils/location";
 
@@ -47,17 +47,31 @@ function WorkerHomeTab({ token, activeSession, onSessionChange }) {
   return (
     <div className="tab-content-grid home-tab-grid">
       <section className="panel quick-status-panel slide-up">
+        <InfoHint
+          title="Estado rapido"
+          text="Muestra si el telefono tiene GPS y red antes de entrar o salir de la jornada."
+        />
         <div className="status-grid">
           <article className="status-box">
-            <p className="eyebrow">Sistema GPS</p>
-            <h3>{location ? "Ubicación activa" : "Pendiente"}</h3>
+            <InfoHint
+              title="GPS"
+              text="Confirma que el telefono puede guardar la ubicacion de entrada y salida."
+            />
+            <span className="status-icon" aria-hidden>📍</span>
+            <p className="eyebrow">GPS</p>
+            <h3>{location ? "Listo" : "Pendiente"}</h3>
             <p className="hint">{gpsMessage}</p>
           </article>
 
           <article className="status-box">
-            <p className="eyebrow">Conexión</p>
-            <h3>{navigator.onLine ? "Estable" : "Sin red"}</h3>
-            <p className="hint">Sincroniza datos con backend en tiempo real.</p>
+            <InfoHint
+              title="Red"
+              text="Indica si el telefono tiene conexion para enviar los datos al servidor."
+            />
+            <span className="status-icon" aria-hidden>{navigator.onLine ? "📶" : "⚠️"}</span>
+            <p className="eyebrow">Red</p>
+            <h3>{navigator.onLine ? "Con señal" : "Sin señal"}</h3>
+            <p className="hint">{navigator.onLine ? "Datos guardados en servidor." : "Revisa la conexión."}</p>
           </article>
         </div>
 
@@ -76,12 +90,6 @@ function WorkerHomeTab({ token, activeSession, onSessionChange }) {
         onSessionChange={onSessionChange}
         onLocationCaptured={setLocation}
       />
-
-      {/* <LocationMapCard
-        title="Ubicación de Check-in"
-        subtitle="La coordenada se guarda en la sesión y queda disponible para supervisión."
-        location={location || sessionLocation}
-      />*/}
     </div>
   );
 }

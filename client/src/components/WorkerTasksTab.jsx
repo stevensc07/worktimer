@@ -1,26 +1,36 @@
 import { useEffect, useMemo, useState } from 'react';
 import { uploadActivityPhoto } from '../api/activityApi';
-import { createTask, listTasks, updateTaskStatus } from '../api/taskApi';
+import { addTaskComment, createTask, listTasks, updateTaskStatus } from '../api/taskApi';
+import InfoHint from './InfoHint';
+import SpeakButton from './SpeakButton';
 import TaskDetailView from './TaskDetailView';
+import VoiceTextInput from './VoiceTextInput';
 
-const TASK_STATUS = ['PENDING', 'IN_PROGRESS', 'COMPLETED'];
 const TASK_STATUS_LABEL = {
-  PENDING: 'Pendiente',
-  IN_PROGRESS: 'En progreso',
-  COMPLETED: 'Completada'
+  PENDING: 'Por hacer',
+  IN_PROGRESS: 'En marcha',
+  STOPPED: 'Detenida',
+  COMPLETED: 'Lista'
 };
 
-function nextTaskStatus(current) {
-  const index = TASK_STATUS.indexOf(current);
-  if (index < 0 || index === TASK_STATUS.length - 1) {
-    return TASK_STATUS[TASK_STATUS.length - 1];
-  }
+const TASK_STATUS_ICON = {
+  PENDING: '🟡',
+  IN_PROGRESS: '🟢',
+  STOPPED: '🛑',
+  COMPLETED: '✅'
+};
 
-  return TASK_STATUS[index + 1];
-}
+const FILTERS = [
+  { value: '', label: 'Todas' },
+  { value: 'PENDING', label: 'Por hacer' },
+  { value: 'IN_PROGRESS', label: 'En marcha' },
+  { value: 'STOPPED', label: 'Detenidas' },
+  { value: 'COMPLETED', label: 'Listas' }
+];
 
 function WorkerTasksTab({ token, activeSession }) {
   const [description, setDescription] = useState('');
+  const [descriptionSource, setDescriptionSource] = useState('typed');
   const [tasks, setTasks] = useState([]);
   const [selectedTaskId, setSelectedTaskId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -28,6 +38,8 @@ function WorkerTasksTab({ token, activeSession }) {
   const [feedback, setFeedback] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [uploadingTaskId, setUploadingTaskId] = useState(null);
+  const [updatingTaskId, setUpdatingTaskId] = useState(null);
+  const [addingComment, setAddingComment] = useState(false);
 
   const selectedTask = useMemo(
     () => tasks.find((task) => String(task._id) === String(selectedTaskId)) || null,
@@ -58,11 +70,15 @@ function WorkerTasksTab({ token, activeSession }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
+  function mergeUpdatedTask(updated) {
+    setTasks((prev) => prev.map((item) => (item._id === updated._id ? updated : item)));
+  }
+
   async function handleCreateTask(event) {
     event.preventDefault();
 
     if (!description.trim()) {
-      setFeedback('Debes escribir una descripción para crear la tarea.');
+      setFeedback('Habla o escribe una tarea.');
       return;
     }
 
@@ -76,7 +92,8 @@ function WorkerTasksTab({ token, activeSession }) {
       });
 
       setDescription('');
-      setFeedback('Tarea creada correctamente.');
+      setDescriptionSource('typed');
+      setFeedback(descriptionSource === 'voice' ? 'Tarea creada con voz.' : 'Tarea creada.');
       await loadTasks();
     } catch (error) {
       setFeedback(error.message);
@@ -85,20 +102,32 @@ function WorkerTasksTab({ token, activeSession }) {
     }
   }
 
-  async function handleStatusAdvance(task) {
-    const status = nextTaskStatus(task.status);
-
-    if (status === task.status) {
-      return;
-    }
+  async function handleSetStatus(task, status) {
+    setUpdatingTaskId(task._id);
 
     try {
       const updated = await updateTaskStatus(token, task._id, status);
-
-      setTasks((prev) => prev.map((item) => (item._id === updated._id ? updated : item)));
-      setFeedback(`Tarea actualizada a ${TASK_STATUS_LABEL[status]}.`);
+      mergeUpdatedTask(updated);
+      setFeedback(`Tarea: ${TASK_STATUS_LABEL[status]}.`);
     } catch (error) {
       setFeedback(error.message);
+    } finally {
+      setUpdatingTaskId(null);
+    }
+  }
+
+  async function handleAddComment(task, payload) {
+    setAddingComment(true);
+
+    try {
+      const updated = await addTaskComment(token, task._id, payload);
+      mergeUpdatedTask(updated);
+      setFeedback(payload.source === 'voice' ? 'Comentario de voz guardado.' : 'Comentario guardado.');
+    } catch (error) {
+      setFeedback(error.message);
+      throw error;
+    } finally {
+      setAddingComment(false);
     }
   }
 
@@ -131,7 +160,7 @@ function WorkerTasksTab({ token, activeSession }) {
           googleDriveFileIds: [...existingFileIds, uploaded.fileId]
         };
       }));
-      setFeedback(`Foto adjuntada a la tarea: ${task.description}`);
+      setFeedback('Foto guardada.');
     } catch (error) {
       setFeedback(error.message);
     } finally {
@@ -144,6 +173,72 @@ function WorkerTasksTab({ token, activeSession }) {
     await loadTasks(nextFilter);
   }
 
+  function renderTaskActions(task) {
+    const isUpdating = updatingTaskId === task._id;
+
+    return (
+      <div className="task-action-board compact" onClick={(event) => event.stopPropagation()}>
+        {task.status === 'PENDING' ? (
+          <button
+            type="button"
+            className="large-action start"
+            onClick={() => handleSetStatus(task, 'IN_PROGRESS')}
+            disabled={isUpdating}
+          >
+            <span aria-hidden>▶</span>
+            <span>Iniciar</span>
+          </button>
+        ) : null}
+
+        {task.status === 'IN_PROGRESS' ? (
+          <>
+            <button
+              type="button"
+              className="large-action stop"
+              onClick={() => handleSetStatus(task, 'STOPPED')}
+              disabled={isUpdating}
+            >
+              <span aria-hidden>■</span>
+              <span>Detener</span>
+            </button>
+            <button
+              type="button"
+              className="large-action done"
+              onClick={() => handleSetStatus(task, 'COMPLETED')}
+              disabled={isUpdating}
+            >
+              <span aria-hidden>✓</span>
+              <span>Lista</span>
+            </button>
+          </>
+        ) : null}
+
+        {task.status === 'STOPPED' ? (
+          <>
+            <button
+              type="button"
+              className="large-action start"
+              onClick={() => handleSetStatus(task, 'IN_PROGRESS')}
+              disabled={isUpdating}
+            >
+              <span aria-hidden>▶</span>
+              <span>Seguir</span>
+            </button>
+            <button
+              type="button"
+              className="large-action done"
+              onClick={() => handleSetStatus(task, 'COMPLETED')}
+              disabled={isUpdating}
+            >
+              <span aria-hidden>✓</span>
+              <span>Lista</span>
+            </button>
+          </>
+        ) : null}
+      </div>
+    );
+  }
+
   if (selectedTask) {
     return (
       <div className="tab-content-grid tasks-tab-grid">
@@ -152,12 +247,14 @@ function WorkerTasksTab({ token, activeSession }) {
           onBack={() => setSelectedTaskId('')}
           statusLabels={TASK_STATUS_LABEL}
           canManage
-          onAdvanceStatus={handleStatusAdvance}
+          onSetStatus={handleSetStatus}
           onUploadPhoto={handlePhotoUpload}
+          onAddComment={handleAddComment}
           uploadingTaskId={uploadingTaskId}
+          addingComment={addingComment}
         />
 
-        {feedback ? <p className="feedback">{feedback}</p> : null}
+        {feedback ? <p className="feedback" aria-live="polite">{feedback}</p> : null}
       </div>
     );
   }
@@ -165,92 +262,90 @@ function WorkerTasksTab({ token, activeSession }) {
   return (
     <div className="tab-content-grid tasks-tab-grid">
       <section className="panel slide-up">
+        <InfoHint
+          title="Nueva tarea"
+          text="Sirve para crear una actividad. Puede hablar por el microfono o escribir."
+        />
         <div className="panel-header-row">
-          <h2>Crear Actividad</h2>
-          <span className="badge badge-muted">{tasks.length} tareas</span>
+          <h2>Nueva tarea</h2>
+          <span className="badge badge-muted">{tasks.length}</span>
         </div>
 
         <form className="task-create-form" onSubmit={handleCreateTask}>
-          <input
-            type="text"
-            placeholder="Describe la actividad de obra"
+          <VoiceTextInput
+            id="task-description"
+            label="Tarea"
             value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            required
+            onChange={(nextValue) => {
+              setDescription(nextValue);
+              if (descriptionSource !== 'voice') {
+                setDescriptionSource('typed');
+              }
+            }}
+            onVoiceCapture={() => setDescriptionSource('voice')}
+            placeholder="Habla o escribe"
+            rows={3}
+            disabled={isCreating}
           />
-          <button type="submit" className="cta-button" disabled={isCreating}>
+          <button type="submit" className="cta-button" disabled={isCreating || !description.trim()}>
             {isCreating ? 'Creando...' : 'Crear tarea'}
           </button>
         </form>
 
-        <div className="filter-row">
-          <button
-            type="button"
-            className={`filter-chip ${statusFilter === '' ? 'active' : ''}`}
-            onClick={() => handleFilterChange('')}
-          >
-            Todas
-          </button>
-          <button
-            type="button"
-            className={`filter-chip ${statusFilter === 'PENDING' ? 'active' : ''}`}
-            onClick={() => handleFilterChange('PENDING')}
-          >
-            Pendientes
-          </button>
-          <button
-            type="button"
-            className={`filter-chip ${statusFilter === 'IN_PROGRESS' ? 'active' : ''}`}
-            onClick={() => handleFilterChange('IN_PROGRESS')}
-          >
-            En progreso
-          </button>
-          <button
-            type="button"
-            className={`filter-chip ${statusFilter === 'COMPLETED' ? 'active' : ''}`}
-            onClick={() => handleFilterChange('COMPLETED')}
-          >
-            Completadas
-          </button>
+        <div className="filter-row" aria-label="Filtro de tareas">
+          {FILTERS.map((filter) => (
+            <button
+              key={filter.value || 'all'}
+              type="button"
+              className={`filter-chip ${statusFilter === filter.value ? 'active' : ''}`}
+              onClick={() => handleFilterChange(filter.value)}
+            >
+              {filter.label}
+            </button>
+          ))}
         </div>
       </section>
 
       <section className="panel slide-up">
+        <InfoHint
+          title="Mis tareas"
+          text="Lista de trabajos del obrero. Desde aqui puede escuchar, iniciar, detener, terminar o tomar foto."
+        />
         <div className="panel-header-row">
-          <h2>Tareas de la Jornada</h2>
+          <h2>Mis tareas</h2>
           {isLoading ? <span className="badge badge-muted">Cargando...</span> : null}
         </div>
 
         <div className="task-list">
           {tasks.map((task) => (
-            <article
-              key={task._id}
-              className="task-card task-card-clickable"
-              onClick={() => setSelectedTaskId(String(task._id))}
-            >
-              <div className="task-card-header">
-                <h3>{task.description}</h3>
+            <article key={task._id} className={`task-card task-status-${task.status.toLowerCase()}`}>
+              <InfoHint
+                title="Tarea"
+                text="Este cuadro muestra una tarea, su estado, fotos y comentarios. Toque el cuadro para ver detalles."
+              />
+              <button
+                type="button"
+                className="task-card-open"
+                onClick={() => setSelectedTaskId(String(task._id))}
+              >
+                <span className="task-state-icon" aria-hidden>{TASK_STATUS_ICON[task.status]}</span>
+                <span className="task-card-main">
+                  <strong>{task.description}</strong>
+                  <small>
+                    {TASK_STATUS_LABEL[task.status]} · Fotos {task.googleDriveFileIds?.length || 0} · Comentarios {task.comments?.length || 0}
+                  </small>
+                </span>
                 <span className={`badge status-${task.status.toLowerCase()}`}>
                   {TASK_STATUS_LABEL[task.status]}
                 </span>
-              </div>
+              </button>
 
-              <p className="hint">Fotos adjuntas: {task.googleDriveFileIds?.length || 0}</p>
-
-              <div className="task-card-actions" onClick={(event) => event.stopPropagation()}>
-                <button
-                  type="button"
-                  className="secondary-action"
-                  onClick={() => handleStatusAdvance(task)}
-                  disabled={task.status === 'COMPLETED'}
-                >
-                  {task.status === 'PENDING' && 'Iniciar'}
-                  {task.status === 'IN_PROGRESS' && 'Marcar completada'}
-                  {task.status === 'COMPLETED' && 'Completada'}
-                </button>
-
+              <div className="task-card-actions">
+                <SpeakButton text={task.description} label="Escuchar" />
+                {renderTaskActions(task)}
                 <label htmlFor={`task-photo-${task._id}`} className="secondary-action">
-                  {uploadingTaskId === task._id ? 'Subiendo...' : 'Adjuntar foto'}
+                  <span aria-hidden>📷</span>
+                  <span>{uploadingTaskId === task._id ? 'Subiendo...' : 'Foto'}</span>
                 </label>
                 <input
                   id={`task-photo-${task._id}`}
@@ -264,10 +359,10 @@ function WorkerTasksTab({ token, activeSession }) {
             </article>
           ))}
 
-          {!isLoading && tasks.length === 0 ? <p className="hint">No hay tareas registradas aún.</p> : null}
+          {!isLoading && tasks.length === 0 ? <p className="hint">No hay tareas.</p> : null}
         </div>
 
-        {feedback ? <p className="feedback">{feedback}</p> : null}
+        {feedback ? <p className="feedback" aria-live="polite">{feedback}</p> : null}
       </section>
     </div>
   );
